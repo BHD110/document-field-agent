@@ -90,7 +90,7 @@ All product codes (**BVY413HSW**, **BVY411HSW**, **BVY413HVY**, **BVY411HVY**), 
 ### 1 — Clone
 
 ```bash
-git clone https://github.com/andyhu/ppocrv6-studio.git
+git clone https://github.com/andyhuo520/ppocrv6-studio.git
 cd ppocrv6-studio
 ```
 

@@ -6,7 +6,7 @@
 # =============================================================================
 set -e
 
-REPO="andyhu/ppocrv6-studio"
+REPO="andyhuo520/ppocrv6-studio"
 BASE="https://github.com/${REPO}/releases/latest/download"
 TARGET="${1:-all}"
 
