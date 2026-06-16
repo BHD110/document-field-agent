@@ -202,6 +202,15 @@
 <p>三档跑完，我对 PP-OCRv6 的判断反而比一开始更清楚了。</p>
 <p>Tiny 适合的场景，想在浏览器或者嵌入式端跑，1.5MB 的体积没得说，规整文档和手写都能用，跑完不出本地。Small 是一个甜点档，7.7MB，速度比 Tiny 稍慢，精度比 Tiny 稍好，尤其是手写场景的提升可以感知。Medium 是有意义的，在手写、彩色教材这类场景上比 Tiny 提升明显，但速度也更慢，适合对精度有要求、但又不想调 API 的本地部署场景。</p>
 <p>三档有一件事是共通的，数据不出本地，不需要 API key，不需要后端，不需要服务器，一个本地工作台就能跑起来。识别完还能看表格、下 CSV/Excel、留历史记录。这对很多场景来说是刚需，比如要处理敏感文档的公司内网，比如离线环境，比如不想为每次 OCR 付 API 费用的个人开发者。</p>
+<p>对了，这套工作台我开源了。</p>
+<p>这篇文章里所有的测试，包括 OmniDocBench 18 张文档评测、四张真实世界图片对比、三档模型切换——全是在这个本地 Studio 上跑的。后端是 FastAPI + ONNX Runtime，Apple Silicon 上自动走 CoreML 加速；前端是一个单页应用，拖拽上传、历史记录、框选可视化都有，表格识别完可以直接导出 CSV/Excel。另外还有一个零依赖的浏览器版本，就一个 HTML 文件，打开就跑，PP-OCRv6 Tiny 完全跑在网页里，图片全程不离开本地。</p>
+<p>整套工作流是这样的，先用 FastAPI 服务把三档 ONNX 模型挂起来，然后用 bench_local_v2.py 把 OmniDocBench 18 张图逐一打过去，拿到每张的识别文本，再和 OmniDocBench 的标注对比，算 Edit Distance。Apple Vision 那边用 ocrmac 调 macOS 系统 API，同一套图跑一遍。整个流程跑完大概两三个小时，结果就是你在上面看到的那张分数表。</p>
+<p>感兴趣可以自己部署跑一遍，macOS Apple Silicon 开箱即用，Intel Mac 和 Linux 改一下 provider 也能跑。</p>
+<div class="tech-note">
+<strong>GitHub：</strong>
+<a href="https://github.com/andyhuo520/ppocrv6-studio" target="_blank" style="color:var(--accent);text-decoration:none">github.com/andyhuo520/ppocrv6-studio</a><br/>
+三步启动，git clone → pip install → python webapp/server.py，ONNX 模型从 Releases 页面一键下载。
+</div>
 <p>所以回到那个问题，OCR 的未来是不是越来越大的 VLM？</p>
 <p>我的判断是，两条路各有各的场景，并不是一条路注定会吃掉另一条。大模型做 OCR，擅长的是「理解文档」，能处理双栏、公式、表格结构；轻量专用模型做 OCR，擅长的是「抄写文字」，逐字准确，无幻觉，能在端侧跑。当你需要的是逐字还原，不是文档理解，专用模型反而更靠谱。</p>
 <p>所以别瞎花钱。如果你的文档是截图、票据、表单、手写笔记，PP-OCRv6 三档随便一个都够用，而且可能是更便宜、更可控、隐私更好的选择。如果你需要处理双栏论文、复杂版式报告，那现阶段还是调 PaddleOCR-VL 或者 GLM-OCR 更合适。不是 PP-OCRv6 不行，而是任务已经从”识别文字”变成了”理解文档”，是两件不同的事。</p>
