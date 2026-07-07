@@ -43,6 +43,8 @@
 
 ## 项目结构
 
+![MCP 架构图](assets/screenshots/mcp_architecture.png)
+
 | 路径 | 说明 |
 | --- | --- |
 | `webapp/server.py` | FastAPI 后端，包含 OCR 推理、任务/页面/字段存储、PDF 渲染、导出接口 |
@@ -192,9 +194,6 @@ PADDLEOCR_VL_TOKEN=...
 
 项目内置了一个轻量的 MCP Server，用来把“文档字段提取工作台”暴露给外部 Agent 调用。它不依赖某个特定 Agent 客户端；只要客户端支持 MCP，就可以接入。
 
-下图展示的是通用 MCP 接入链路：Agent Client 可以替换为任意支持 MCP 的客户端，MCP Server 通过本地 HTTP API 调用文档工作台，完成 OCR、字段抽取、复核报告和 Excel 导出。
-
-![MCP 架构图](assets/screenshots/mcp_architecture.png)
 
 MCP 工具包括：
 
