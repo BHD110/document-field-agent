@@ -188,19 +188,13 @@ PADDLEOCR_VL_TOKEN=...
 
 也可以通过 `scripts/make_secret_blob.py` 生成本地运行时混淆 blob，但这只是便于部署的混淆方案，不是真正的密钥安全边界。请不要把任何 API Key、token、`.env`、`secrets.blob` 或运行日志提交到仓库。
 
-## PilotDeck / Agent 接入
+## MCP / Agent 接入
 
-项目内置了一个轻量的 PilotDeck 适配层，方便 Agent 调度文档处理流程。
+项目内置了一个轻量的 MCP Server，用来把“文档字段提取工作台”暴露给外部 Agent 调用。它不依赖某个特定 Agent 客户端；只要客户端支持 MCP，就可以接入。
 
-![PilotDeck MCP 调用示例](assets/screenshots/pilotdeck_mcp_example.png)
+下图展示的是通用 MCP 接入链路：Agent Client 可以替换为任意支持 MCP 的客户端，MCP Server 通过本地 HTTP API 调用文档工作台，完成 OCR、字段抽取、复核报告和 Excel 导出。
 
-上图是在 PilotDeck 中通过 MCP 调用文档工作台：用户给出本地图片路径和需要抽取的字段，Agent 创建文档任务、读取处理状态、汇总字段结果，并导出 Excel 与复核报告。
-
-主要文件：
-
-- `pilotdeck/mcp_server.py`
-- `pilotdeck/skills/local-document-entry/SKILL.md`
-- `pilotdeck/examples/教案录入案例.md`
+![MCP 架构图](assets/screenshots/mcp_architecture.png)
 
 MCP 工具包括：
 
@@ -210,7 +204,11 @@ MCP 工具包括：
 - `export_task_excel`
 - `export_task_report`
 
-启动文档工作台后，可以让 PilotDeck 通过 MCP 调用本地服务，实现“从本地路径创建任务 -> 查询状态 -> 导出 Excel -> 生成复核报告”的自动化流程。
+启动文档工作台后，任意 MCP Client 都可以通过这个 MCP Server 调用本地服务，实现“从本地路径创建任务 -> 查询状态 -> 导出 Excel -> 生成复核报告”的自动化流程。
+
+![MCP 调用示例](assets/screenshots/pilotdeck_mcp_example.png)
+
+上图是在 PilotDeck 中演示 MCP 调用效果：用户给出本地图片路径和需要抽取的字段，Agent 通过 MCP 创建文档任务、读取处理状态、汇总字段结果，并导出 Excel 与复核报告。MCP Server 本身是通用的，也可以接入任何支持 MCP 的 Agent。
 
 ## API 概览
 
@@ -246,7 +244,25 @@ python -m compileall webapp bench_local_v2.py gen_result_vis.py run_apple_vision
 - 有字段模式导出 Excel。
 - 无字段模式导出 TXT / Markdown / CSV / HTML。
 - 低置信度字段在结果页标红。
-- PilotDeck MCP 能列出工具并创建任务。
+- MCP Server 能列出工具并创建任务。
+
+## 企业合作 / 定制服务
+
+如果你的团队有大量重复性的资料识别、系统录入、知识库问答、数据抓取、内容生成、客服或运营流程，可以基于本项目或现有 AI 自动化能力做进一步落地。
+
+目前支持通用产品交付，也承接行业定制。可覆盖的方向包括：
+
+- 文档识别、字段抽取、自动录入系统
+- 企业知识库、知识库问答、内部资料检索
+- AI 客服、运营助手、内容生成工作流
+- 小红书等内容平台自动化
+- 直播监控、数据抓取与异常提醒
+- Wind 数据分析、行业数据处理
+- 医疗 AI、律所资料录入等垂直场景
+
+有类似需求的企业或团队，可以扫码添加微信沟通。
+
+![微信联系二维码](assets/contact/wechat_qr.jpg)
 
 ## 开源与致谢
 
