@@ -9,12 +9,18 @@ __pycache__/
 ppocrv6_onnx/
 ppocrv6_small_onnx/
 ppocrv6_medium_onnx/
+models/
+tools/llama/
 
 # Webapp runtime data
 webapp/data/uploads/
 webapp/data/annotated/
 webapp/data/thumbs/
+webapp/data/task_pages/
 webapp/data/history.db
+webapp/data/config.json
+webapp/data/secrets.blob
+vl1.6.txt
 
 # OmniDocBench submodule data
 OmniDocBench/

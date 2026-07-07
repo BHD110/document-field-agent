@@ -6,10 +6,12 @@ fastapi>=0.110.0
 uvicorn>=0.29.0
 python-multipart>=0.0.9
 Pillow>=10.0.0
-numpy<2.0.0
+numpy>=1.26.0
 onnxruntime>=1.17.0          # use onnxruntime-silicon on Apple M-series for CoreML
 PyYAML>=6.0
 openpyxl>=3.1.0
+requests>=2.31.0
+pypdfium2>=4.30.0
 
 # Optional: faster inference on Apple Silicon
 # pip install onnxruntime-silicon  # replaces onnxruntime above
