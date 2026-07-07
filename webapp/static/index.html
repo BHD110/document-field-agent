@@ -241,11 +241,11 @@ pre.text{
       <button data-view="settings">模型设置 <small>local/cloud</small></button>
     </nav>
     <div class="side-card">
-      <strong>试用额度</strong>
-      <div class="usage-line"><span>已用</span><b id="used-pages">0 页</b></div>
+      <strong>免费演示版</strong>
+      <div class="usage-line"><span>页数限制</span><b id="used-pages">不限</b></div>
       <div class="meter"><span id="usage-meter"></span></div>
-      <div class="usage-line"><span>剩余</span><b id="left-pages">10 页</b></div>
-      <p style="margin:10px 0 0;color:var(--muted);font-size:12px;line-height:1.5">支付入口已预留，第一版先使用 10 页试用额度。</p>
+      <div class="usage-line"><span>当前分支</span><b id="left-pages">免费开放</b></div>
+      <p style="margin:10px 0 0;color:var(--muted);font-size:12px;line-height:1.5">当前开源版本免费开放，本地和云端流程均可直接演示。</p>
     </div>
   </aside>
 
@@ -306,19 +306,19 @@ pre.text{
           <div class="card">
             <div class="card-head">
               <h3>模型选择</h3>
-              <p>本地模式隐私在本机，云端模式需联网并按页计费。</p>
+              <p>本地模式隐私在本机，云端模式需联网；当前开源版本免费开放。</p>
             </div>
             <div class="card-body">
               <div class="mode-grid">
                 <label class="mode">
                   <input type="radio" name="mode" value="local" checked>
                   <strong>本地模型</strong>
-                  <p>PP-OCRv6 + MiniCPM5-1B 字段抽取，速度快，适合隐私文档。预留定价 49.9，当前开放 10 页试用。</p>
+                  <p>PP-OCRv6 + MiniCPM5-1B 字段抽取，速度快，适合隐私文档。当前分支免费开放，可直接演示。</p>
                 </label>
                 <label class="mode">
                   <input type="radio" name="mode" value="cloud">
                   <strong>云端高精度</strong>
-                  <p>PaddleOCR-VL-1.6 + qwen-plus，适合非敏感高准确率场景。预留定价 1 元/页，当前开放 10 页试用。</p>
+                  <p>PaddleOCR-VL-1.6 + qwen-plus，适合非敏感高准确率场景。当前分支免费开放，可直接演示。</p>
                 </label>
               </div>
               <div class="btn-row">
@@ -398,13 +398,13 @@ pre.text{
         <div class="model-card">
           <strong>本地模型</strong>
           <p>OCR 使用 PP-OCRv6；字段抽取固定使用 MiniCPM5-1B-GGUF Q4_K_M，通过本机 llama.cpp sidecar 调用。</p>
-          <p style="margin-top:10px">预留定价：49.9；支付入口后续接入。</p>
+          <p style="margin-top:10px">当前开源版本免费开放，可直接用于演示。</p>
           <p id="local-model-status" style="margin-top:10px">正在检查本地模型资产。</p>
         </div>
         <div class="model-card">
           <strong>云端模型</strong>
           <p>文档解析使用 PaddleOCR-VL-1.6；字段抽取使用 DashScope qwen-plus。密钥来自运行时混淆 blob 或环境变量。</p>
-          <p style="margin-top:10px">预留定价：1 元/页；支付入口后续接入。</p>
+          <p style="margin-top:10px">当前开源版本免费开放，可直接用于演示。</p>
         </div>
       </div>
     </section>
@@ -514,11 +514,9 @@ async function loadUsage(){
 }
 
 function renderUsage(u){
-  const used = u.trial_used_pages || 0;
-  const limit = u.trial_limit_pages || 10;
-  $("#used-pages").textContent = used + " 页";
-  $("#left-pages").textContent = Math.max(0, limit - used) + " 页";
-  $("#usage-meter").style.width = Math.min(100, used / limit * 100) + "%";
+  $("#used-pages").textContent = "不限";
+  $("#left-pages").textContent = "免费开放";
+  $("#usage-meter").style.width = "100%";
 }
 
 function addFiles(files){

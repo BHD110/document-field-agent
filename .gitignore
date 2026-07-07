@@ -21,6 +21,10 @@ webapp/data/history.db
 webapp/data/config.json
 webapp/data/secrets.blob
 vl1.6.txt
+.env
+.env.*
+*.pem
+*.key
 
 # OmniDocBench submodule data
 OmniDocBench/

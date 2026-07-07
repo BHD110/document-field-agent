@@ -73,7 +73,7 @@ Recent history uses short, imperative English subjects, sometimes with a prefix 
 
 - Local mode uses PP-OCRv6 plus the fixed MiniCPM5-1B local text model through llama.cpp on CPU.
 - Cloud mode uses PaddleOCR-VL-1.6 for document parsing and DashScope `qwen-plus` for field extraction.
-- PilotDeck contest integration lives under `pilotdeck/`; the `local-document-entry` Skill must be maintained according to the system `skill-creator` workflow and validated with `quick_validate.py`.
+- PilotDeck integration lives under `pilotdeck/`; the `local-document-entry` Skill must be maintained according to the system `skill-creator` workflow and validated with `quick_validate.py`.
 - Cloud result HTML must be sanitized/rendered for display, while field extraction should use plain text / key-value text derived from the HTML.
 - Field results are read-only in v1. Confidence below `0.7` is shown as low confidence; values below the minimum value confidence should be treated as missing.
 - API keys must never appear in source, config, logs, docs, or untracked notes. Use environment variables or the ignored obfuscated blob only.

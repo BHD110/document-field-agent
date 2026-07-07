@@ -84,7 +84,7 @@ for d in (UPLOADS, ANNOTATED, THUMBS, TASK_PAGES):
 
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 MAX_TASK_PAGES = 200
-TRIAL_PAGE_LIMIT = 10
+FREE_EDITION = True
 FIELD_CONF_THRESHOLD = 0.70
 FIELD_MIN_VALUE_CONFIDENCE = 0.50
 LOCAL_QWEN_URL = os.environ.get("DOC_WORKBENCH_LOCAL_LLM_URL", "http://127.0.0.1:11435/v1/chat/completions")
@@ -1065,13 +1065,22 @@ def set_usage_pages(count: int):
         c.commit()
 
 
-def ensure_trial_available(page_count: int):
-    used = get_usage_pages()
-    if used + page_count > TRIAL_PAGE_LIMIT:
-        raise HTTPException(
-            402,
-            f"试用额度不足：共 {TRIAL_PAGE_LIMIT} 页，已使用 {used} 页，本次需要 {page_count} 页"
-        )
+def ensure_processing_allowed(page_count: int):
+    # The open-source edition is free; keep this hook for future policy changes.
+    return
+
+
+def usage_payload() -> dict:
+    return {
+        "mode": "free" if FREE_EDITION else "standard",
+        "billing_enabled": False,
+        "trial_enabled": False,
+        "trial_limit_pages": None,
+        "trial_used_pages": 0,
+        "trial_remaining_pages": None,
+        "payment_reserved": False,
+        "message": "当前开源版本免费开放，不限制处理页数。",
+    }
 
 
 def image_from_bytes(data: bytes, filename: str) -> Image.Image:
@@ -1904,11 +1913,7 @@ async def info():
             "cloud_text_model": "qwen-plus",
             "cloud_vl_model": PADDLE_VL_MODEL,
         },
-        "usage": {
-            "trial_limit_pages": TRIAL_PAGE_LIMIT,
-            "trial_used_pages": get_usage_pages(),
-            "trial_remaining_pages": max(0, TRIAL_PAGE_LIMIT - get_usage_pages()),
-        }
+        "usage": usage_payload()
     }
 
 @app.get("/health")
@@ -1918,13 +1923,7 @@ async def health():
 
 @app.get("/usage")
 async def usage_get():
-    used = get_usage_pages()
-    return {
-        "trial_limit_pages": TRIAL_PAGE_LIMIT,
-        "trial_used_pages": used,
-        "trial_remaining_pages": max(0, TRIAL_PAGE_LIMIT - used),
-        "payment_reserved": True,
-    }
+    return usage_payload()
 
 
 @app.post("/tasks")
@@ -1949,7 +1948,7 @@ async def tasks_create(
         fields = normalize_fields(fields_json)
 
     pages = build_page_inputs(uploaded)
-    ensure_trial_available(len(pages))
+    ensure_processing_allowed(len(pages))
 
     task_id = uuid.uuid4().hex[:12]
     source_names = [safe_name(name) for name, _ in uploaded]
@@ -1977,12 +1976,10 @@ async def tasks_create(
             (task_id, now, now, title, mode, "running", len(pages), 0, 0,
              json.dumps(source_names, ensure_ascii=False),
              json.dumps(fields, ensure_ascii=False), 1 if fields else 0,
-             total_bytes, len(pages), cloud_error))
+             total_bytes, 0, cloud_error))
         c.commit()
 
     processed = failed = 0
-    used_before = get_usage_pages()
-    set_usage_pages(used_before + len(pages))
 
     for idx, page in enumerate(pages):
         page_id = uuid.uuid4().hex[:12]
@@ -2071,7 +2068,7 @@ async def agent_tasks_from_path(payload: dict = Body(...)):
     fields = normalize_fields(payload.get("fields") or payload.get("fields_json") or [])
     uploaded = collect_agent_uploads(paths)
     pages = build_page_inputs(uploaded)
-    ensure_trial_available(len(pages))
+    ensure_processing_allowed(len(pages))
 
     task_id = uuid.uuid4().hex[:12]
     source_names = [safe_name(name) for name, _ in uploaded]
@@ -2101,12 +2098,10 @@ async def agent_tasks_from_path(payload: dict = Body(...)):
             (task_id, now, now, title, mode, "running", len(pages), 0, 0,
              json.dumps(source_names, ensure_ascii=False),
              json.dumps(fields, ensure_ascii=False), 1 if fields else 0,
-             total_bytes, len(pages), cloud_error))
+             total_bytes, 0, cloud_error))
         c.commit()
 
     processed = failed = 0
-    used_before = get_usage_pages()
-    set_usage_pages(used_before + len(pages))
 
     for idx, page in enumerate(pages):
         page_id = uuid.uuid4().hex[:12]

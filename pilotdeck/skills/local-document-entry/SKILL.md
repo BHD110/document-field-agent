@@ -19,7 +19,7 @@ description: Use when PilotDeck needs to batch process local PDFs, images, scann
 
 ## Operating rules
 
-- Prefer `mode="local"` for privacy and contest demos; this uses PP-OCRv6 plus MiniCPM5-1B.
+- Prefer `mode="local"` for privacy-sensitive local demos; this uses PP-OCRv6 plus MiniCPM5-1B.
 - Use cloud mode only when the user explicitly asks for cloud processing.
 - Treat confidence below `0.7` as a review item, not a final failure.
 - Do not edit extracted field results manually; rerun the task or ask for corrected fields when needed.
@@ -28,4 +28,4 @@ description: Use when PilotDeck needs to batch process local PDFs, images, scann
 ## References
 
 - Read `references/api.md` when wiring or troubleshooting MCP/HTTP calls.
-- Read `references/examples.md` when preparing a demo prompt, field template, or contest write-up.
+- Read `references/examples.md` when preparing a demo prompt, field template, or product write-up.
