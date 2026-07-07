@@ -21,6 +21,8 @@ webapp/data/history.db
 webapp/data/config.json
 webapp/data/secrets.blob
 vl1.6.txt
+vl1.6txt
+vl1.6*
 .env
 .env.*
 *.pem

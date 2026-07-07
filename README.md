@@ -20,8 +20,6 @@
 - 可选云端高精度：可接 PaddleOCR-VL-1.6 与 DashScope qwen-plus。
 - 可选 Agent 调度：内置 PilotDeck Skill / MCP 适配层，可让 Agent 调度批量处理、导出和复核报告。
 
-当前开源版本不内置计费和试用额度限制。
-
 ## 技术路线
 
 ```text
@@ -60,20 +58,24 @@
 ## 环境要求
 
 - Python 3.10+
-- Windows / macOS / Linux
+- Windows
 - 建议内存 8GB+
 - 本地字段抽取需要约 700MB 的 MiniCPM5-1B GGUF 模型文件
 - PDF 支持依赖 `pypdfium2`
 
-macOS Apple Silicon 可以使用 `onnxruntime-silicon` 获得更好的本地 OCR 推理体验；Windows 和 Linux 使用标准 `onnxruntime` 即可。
+验证状态：
+
+- Windows：已验证 OCR、任务处理、字段抽取、Excel 导出与 PilotDeck MCP 调用流程。
+- macOS / Linux：当前分支尚未完整验证。理论上 FastAPI、ONNX Runtime、llama.cpp 都可跨平台运行，但启动脚本、模型下载、MCP 调用和本地 sidecar 仍需要实机确认。
+- OCR 能力来自 PP-OCRv6，本地 OCR 主流程已完成验证。
 
 ## 快速开始
 
 ### 1. 克隆项目
 
 ```bash
-git clone 仓库地址
-cd ppocrv6-studio
+git clone https://github.com/BHD110/document-field-agent.git
+cd document-field-agent
 ```
 
 ### 2. 创建虚拟环境并安装依赖
@@ -189,6 +191,10 @@ PADDLEOCR_VL_TOKEN=...
 ## PilotDeck / Agent 接入
 
 项目内置了一个轻量的 PilotDeck 适配层，方便 Agent 调度文档处理流程。
+
+![PilotDeck MCP 调用示例](assets/screenshots/pilotdeck_mcp_example.png)
+
+上图是在 PilotDeck 中通过 MCP 调用文档工作台：用户给出本地图片路径和需要抽取的字段，Agent 创建文档任务、读取处理状态、汇总字段结果，并导出 Excel 与复核报告。
 
 主要文件：
 
