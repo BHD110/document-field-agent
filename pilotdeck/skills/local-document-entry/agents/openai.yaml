@@ -1,0 +1,4 @@
+interface:
+  display_name: "本地文档录入"
+  short_description: "调度本地文档工作台批量抽字段并自动导出 Excel 报告"
+  default_prompt: "Use $local-document-entry to process scanned documents, extract fields, export Excel, and generate a review report."

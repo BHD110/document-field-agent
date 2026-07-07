@@ -28,10 +28,10 @@ The studio runs at `http://localhost:8766` by default; override with `DOC_WORKBE
 For local field extraction assets:
 
 ```bash
-python scripts/setup_qwen25_sidecar.py
+python scripts/setup_minicpm5_sidecar.py
 ```
 
-This downloads the fixed local text model (`Qwen2.5-0.5B-Instruct-GGUF Q5_K_M`) and llama.cpp CPU sidecar files into ignored directories. `scripts/setup_qwen3_sidecar.py` downloads an optional Qwen3-0.6B test model for experiments only; do not expose it as a user-facing v1 model choice unless product requirements change.
+This downloads the fixed local text model (`MiniCPM5-1B-GGUF Q4_K_M`) and llama.cpp CPU sidecar files into ignored directories. Do not expose Qwen2.5, Qwen3, or other MiniCPM quantizations as user-facing local model choices unless product requirements change.
 
 For cloud keys, generate the ignored runtime blob from environment variables:
 
@@ -44,7 +44,7 @@ Supported variables are `DASHSCOPE_API_KEY` and `PADDLEOCR_VL_TOKEN`. The blob i
 Before submitting Python changes, run:
 
 ```bash
-python -m compileall webapp bench_local_v2.py gen_result_vis.py run_apple_vision.py scripts/make_secret_blob.py scripts/setup_qwen25_sidecar.py scripts/setup_qwen3_sidecar.py
+python -m compileall webapp bench_local_v2.py gen_result_vis.py run_apple_vision.py scripts/make_secret_blob.py scripts/setup_minicpm5_sidecar.py pilotdeck/mcp_server.py
 ```
 
 ## Coding Style & Naming Conventions
@@ -71,8 +71,9 @@ Recent history uses short, imperative English subjects, sometimes with a prefix 
 
 ## Product and Security Notes
 
-- Local mode uses PP-OCRv6 plus the fixed Qwen2.5 local text model through llama.cpp on CPU.
+- Local mode uses PP-OCRv6 plus the fixed MiniCPM5-1B local text model through llama.cpp on CPU.
 - Cloud mode uses PaddleOCR-VL-1.6 for document parsing and DashScope `qwen-plus` for field extraction.
+- PilotDeck contest integration lives under `pilotdeck/`; the `local-document-entry` Skill must be maintained according to the system `skill-creator` workflow and validated with `quick_validate.py`.
 - Cloud result HTML must be sanitized/rendered for display, while field extraction should use plain text / key-value text derived from the HTML.
 - Field results are read-only in v1. Confidence below `0.7` is shown as low confidence; values below the minimum value confidence should be treated as missing.
 - API keys must never appear in source, config, logs, docs, or untracked notes. Use environment variables or the ignored obfuscated blob only.

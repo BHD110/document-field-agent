@@ -313,7 +313,7 @@ pre.text{
                 <label class="mode">
                   <input type="radio" name="mode" value="local" checked>
                   <strong>本地模型</strong>
-                  <p>PP-OCRv6 + Qwen2.5 字段抽取，速度快，适合隐私文档。预留定价 49.9，当前开放 10 页试用。</p>
+                  <p>PP-OCRv6 + MiniCPM5-1B 字段抽取，速度快，适合隐私文档。预留定价 49.9，当前开放 10 页试用。</p>
                 </label>
                 <label class="mode">
                   <input type="radio" name="mode" value="cloud">
@@ -397,7 +397,7 @@ pre.text{
       <div class="settings-grid">
         <div class="model-card">
           <strong>本地模型</strong>
-          <p>OCR 使用 PP-OCRv6；字段抽取固定使用 Qwen2.5-0.5B-Instruct-GGUF Q5_K_M，通过本机 llama.cpp sidecar 调用。</p>
+          <p>OCR 使用 PP-OCRv6；字段抽取固定使用 MiniCPM5-1B-GGUF Q4_K_M，通过本机 llama.cpp sidecar 调用。</p>
           <p style="margin-top:10px">预留定价：49.9；支付入口后续接入。</p>
           <p id="local-model-status" style="margin-top:10px">正在检查本地模型资产。</p>
         </div>
@@ -499,10 +499,10 @@ async function loadInfo(){
   try{
     state.info = await api("/info");
     $("#engine-pill").textContent = `${state.info.backend} · ${state.info.workbench.local_text_model}`;
-    const local = state.info.workbench.local_qwen || {};
+    const local = state.info.workbench.local_llm || state.info.workbench.local_qwen || {};
     $("#local-model-status").textContent = local.model_exists && local.llama_server_exists
-      ? "本地 Qwen2.5 模型和 llama-server 已就绪。"
-      : "本地 Qwen2.5 sidecar 未就绪，请放入固定 GGUF 模型和 llama-server 后再使用本地字段抽取。";
+      ? "本地 MiniCPM5-1B 模型和 llama-server 已就绪。"
+      : "本地 MiniCPM5-1B sidecar 未就绪，请放入固定 GGUF 模型和 llama-server 后再使用本地字段抽取。";
     renderUsage(state.info.usage);
   }catch(e){
     $("#engine-pill").textContent = "服务未连接";

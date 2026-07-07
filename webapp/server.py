@@ -8,7 +8,7 @@ from collections import Counter
 from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from html.parser import HTMLParser
 import math
 import numpy as np
@@ -67,7 +67,10 @@ MODEL_VARIANTS = {
     },
 }
 STATIC    = Path(__file__).parent / "static"
-DATA      = Path(__file__).parent / "data"
+_DATA_ENV = os.environ.get("DOC_WORKBENCH_DATA_DIR")
+DATA      = Path(_DATA_ENV) if _DATA_ENV else Path(__file__).parent / "data"
+if not DATA.is_absolute():
+    DATA = ROOT / DATA
 UPLOADS   = DATA / "uploads"
 ANNOTATED = DATA / "annotated"
 THUMBS    = DATA / "thumbs"
@@ -85,8 +88,8 @@ TRIAL_PAGE_LIMIT = 10
 FIELD_CONF_THRESHOLD = 0.70
 FIELD_MIN_VALUE_CONFIDENCE = 0.50
 LOCAL_QWEN_URL = os.environ.get("DOC_WORKBENCH_LOCAL_LLM_URL", "http://127.0.0.1:11435/v1/chat/completions")
-DEFAULT_LOCAL_QWEN_MODEL = "Qwen2.5-0.5B-Instruct-GGUF-Q5_K_M"
-DEFAULT_LOCAL_QWEN_MODEL_PATH = ROOT / "models" / "qwen2.5-0.5b-instruct-q5_k_m.gguf"
+DEFAULT_LOCAL_QWEN_MODEL = "MiniCPM5-1B-GGUF-Q4_K_M"
+DEFAULT_LOCAL_QWEN_MODEL_PATH = ROOT / "models" / "minicpm5-1b-q4_k_m.gguf"
 LOCAL_QWEN_MODEL = os.environ.get("DOC_WORKBENCH_LOCAL_LLM_DISPLAY_NAME", DEFAULT_LOCAL_QWEN_MODEL)
 LOCAL_QWEN_MODEL_PATH = Path(os.environ.get("DOC_WORKBENCH_LOCAL_LLM_MODEL_PATH", str(DEFAULT_LOCAL_QWEN_MODEL_PATH)))
 LOCAL_QWEN_REQUEST_MODEL = os.environ.get("DOC_WORKBENCH_LOCAL_LLM_MODEL", str(LOCAL_QWEN_MODEL_PATH))
@@ -784,6 +787,10 @@ def public_path(path: Path | str | None) -> str:
         return ""
     p = Path(path)
     try:
+        return "data/" + str(p.relative_to(DATA)).replace("\\", "/")
+    except Exception:
+        pass
+    try:
         return str(p.relative_to(ROOT / "webapp")).replace("\\", "/")
     except Exception:
         return str(p).replace("\\", "/")
@@ -1128,6 +1135,43 @@ def build_page_inputs(uploaded: list[tuple[str, bytes]]) -> list[dict]:
     return pages
 
 
+AGENT_SUPPORTED_INPUT_EXTS = {
+    ".pdf", ".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff"
+}
+
+
+def collect_agent_uploads(paths: list[str]) -> list[tuple[str, bytes]]:
+    uploads: list[tuple[str, bytes]] = []
+    missing: list[str] = []
+    unsupported: list[str] = []
+    for raw in paths or []:
+        p = Path(str(raw)).expanduser()
+        if not p.exists():
+            missing.append(str(p))
+            continue
+        files = [p]
+        if p.is_dir():
+            files = [
+                f for f in sorted(p.rglob("*"))
+                if f.is_file() and f.suffix.lower() in AGENT_SUPPORTED_INPUT_EXTS
+            ]
+        for f in files:
+            if not f.is_file():
+                continue
+            if f.suffix.lower() not in AGENT_SUPPORTED_INPUT_EXTS:
+                unsupported.append(str(f))
+                continue
+            uploads.append((f.name, f.read_bytes()))
+    if missing:
+        raise HTTPException(400, "Input path not found: " + "; ".join(missing[:5]))
+    if not uploads:
+        detail = "No supported PDF/image files found"
+        if unsupported:
+            detail += "; unsupported examples: " + "; ".join(unsupported[:5])
+        raise HTTPException(400, detail)
+    return uploads
+
+
 def compact_ocr_lines(lines: list[dict] | None) -> list[dict]:
     items = []
     for idx, line in enumerate(lines or [], start=1):
@@ -1386,6 +1430,49 @@ def field_prompt(text: str, fields: list[dict], lines: list[dict] | None = None)
     ]
 
 
+def local_field_prompt(text: str, fields: list[dict], lines: list[dict] | None = None) -> list[dict]:
+    field_names = [f["name"] for f in fields]
+    candidates = field_candidates(text, fields, lines)
+    schema = {
+        "fields": [
+            {
+                "name": "字段名，必须与输入字段完全一致",
+                "value": "从 OCR 原文或候选值中复制的抽取值；找不到则为空字符串",
+                "confidence": 0.86,
+                "evidence": "包含 value 的 OCR 原文片段；找不到则为空字符串",
+                "status": "ok | low_confidence | missing",
+            }
+        ]
+    }
+    system = (
+        "You are a strict document field extraction engine. "
+        "Return only one valid JSON object. Do not use Markdown. Do not explain. "
+        "Do not invent values. If a field is absent or blank, mark it missing."
+    )
+    user = (
+        "Extract the requested fields from OCR text.\n"
+        "Output must be valid JSON matching this schema:\n"
+        + json.dumps(schema, ensure_ascii=False)
+        + "\n\nRequested fields:\n"
+        + json.dumps(field_names, ensure_ascii=False)
+        + "\n\nCandidate values, sorted by reliability. Prefer these when they are supported by OCR:\n"
+        + json.dumps(candidates, ensure_ascii=False)
+        + "\n\nRules:\n"
+        "1. Return every requested field exactly once.\n"
+        "2. The name value must exactly equal one requested field name.\n"
+        "3. The value must be copied from OCR text or candidate values; never rewrite or guess.\n"
+        "4. If the original form cell is blank, return value=\"\", confidence=0, evidence=\"\", status=\"missing\".\n"
+        "5. Use status=\"low_confidence\" when confidence is below 0.7.\n"
+        "6. JSON only. The first character must be { and the last character must be }.\n"
+        "\nOCR context:\n"
+        + extraction_context(text, lines, fields)
+    )
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
+
+
 def fallback_field_extract(text: str, fields: list[dict], extractor: str, lines: list[dict] | None = None) -> tuple[list[dict], str]:
     results = []
     joined = "\n".join(ln.strip() for ln in (text or "").splitlines() if ln.strip())
@@ -1482,6 +1569,11 @@ def local_qwen_assets_status() -> dict:
     }
 
 
+def local_llm_host_port() -> tuple[str, str]:
+    parsed = urlparse(LOCAL_QWEN_URL)
+    return parsed.hostname or "127.0.0.1", str(parsed.port or 11435)
+
+
 def ensure_local_qwen_sidecar():
     global _qwen_sidecar_process
     if requests is None:
@@ -1496,11 +1588,12 @@ def ensure_local_qwen_sidecar():
         return
     if _qwen_sidecar_process and _qwen_sidecar_process.poll() is None:
         return
+    host, port = local_llm_host_port()
     args = [
         str(LLAMA_SERVER_EXE),
         "-m", str(LOCAL_QWEN_MODEL_PATH),
-        "--host", "127.0.0.1",
-        "--port", "11435",
+        "--host", host,
+        "--port", port,
         "-c", "4096",
         "-ngl", "0",
     ]
@@ -1525,17 +1618,25 @@ def extract_fields_local(text: str, fields: list[dict], lines: list[dict] | None
     if not fields:
         return [], ""
     if requests is None:
-        return fallback_field_extract(text, fields, "local-qwen-unavailable", lines)
+        return fallback_field_extract(text, fields, "local-minicpm-unavailable", lines)
     ensure_local_qwen_sidecar()
-    payload = {"model": LOCAL_QWEN_REQUEST_MODEL, "messages": field_prompt(text, fields, lines), "temperature": 0.2, "top_p": 0.8, "max_tokens": 1200}
+    payload = {
+        "model": LOCAL_QWEN_REQUEST_MODEL,
+        "messages": local_field_prompt(text, fields, lines),
+        "temperature": 0,
+        "top_p": 0.8,
+        "max_tokens": 1200,
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
     try:
         r = requests.post(LOCAL_QWEN_URL, json=payload, timeout=90)
         r.raise_for_status()
-        content = r.json()["choices"][0]["message"]["content"]
+        message = r.json()["choices"][0]["message"]
+        content = message.get("content") or message.get("reasoning_content") or ""
         results, extractor = normalize_field_results(parse_json_object(content), fields, f"local-{LOCAL_QWEN_MODEL}")
         return validate_field_results(text, fields, results, lines), extractor
     except Exception:
-        return fallback_field_extract(text, fields, "local-qwen-unavailable", lines)
+        return fallback_field_extract(text, fields, "local-minicpm-unavailable", lines)
 
 
 def extract_fields_cloud(text: str, fields: list[dict], lines: list[dict] | None = None) -> tuple[list[dict], str]:
@@ -1662,6 +1763,94 @@ def task_export_data(task_id: str):
             raise HTTPException(404, "Task not found")
         return task_dict(c, task, include_pages=True)
 
+
+def agent_task_summary_data(task: dict) -> dict:
+    missing = []
+    low_confidence = []
+    field_names = [f["name"] for f in task.get("fields", [])]
+    for page in task.get("pages", []):
+        seen = {f["name"]: f for f in page.get("fields", [])}
+        for name in field_names:
+            item = seen.get(name)
+            if not item or not str(item.get("value") or "").strip() or item.get("status") == "missing":
+                missing.append({
+                    "page_id": page["id"],
+                    "page_index": page["page_index"],
+                    "source_name": page["source_name"],
+                    "page_number": page["page_number"],
+                    "field": name,
+                })
+                continue
+            confidence = float(item.get("confidence") or 0)
+            if confidence < FIELD_CONF_THRESHOLD:
+                low_confidence.append({
+                    "page_id": page["id"],
+                    "page_index": page["page_index"],
+                    "source_name": page["source_name"],
+                    "page_number": page["page_number"],
+                    "field": name,
+                    "value": item.get("value") or "",
+                    "confidence": confidence,
+                    "evidence": item.get("evidence") or "",
+                })
+    return {
+        "id": task["id"],
+        "title": task.get("title") or "",
+        "mode": task.get("mode") or "",
+        "status": task.get("status") or "",
+        "total_pages": int(task.get("total_pages") or 0),
+        "processed_pages": int(task.get("processed_pages") or 0),
+        "failed_pages": int(task.get("failed_pages") or 0),
+        "source_names": task.get("source_names") or [],
+        "fields": field_names,
+        "missing_fields": missing,
+        "low_confidence_fields": low_confidence,
+        "export_xlsx_url": f"/tasks/{task['id']}/export?fmt=xlsx" if field_names else "",
+        "report_md_url": f"/agent/tasks/{task['id']}/report?fmt=md",
+        "report_json_url": f"/agent/tasks/{task['id']}/report?fmt=json",
+    }
+
+
+def agent_task_report_markdown(task: dict) -> str:
+    summary = agent_task_summary_data(task)
+    lines = [
+        f"# {summary['title'] or summary['id']} 文档录入报告",
+        "",
+        "## 处理链路",
+        "",
+        "PilotDeck 调度 → 文档工作台 → OCR/VL 解析 → 字段候选召回 → 表格结构判断 → MiniCPM5-1B 裁决 → 置信度校验 → Excel 导出",
+        "",
+        "## 任务概览",
+        "",
+        f"- Task ID: `{summary['id']}`",
+        f"- 模式: `{summary['mode']}`",
+        f"- 状态: `{summary['status']}`",
+        f"- 页数: {summary['processed_pages']}/{summary['total_pages']}，失败 {summary['failed_pages']} 页",
+        f"- 文件: {', '.join(summary['source_names'])}",
+        f"- 字段: {', '.join(summary['fields']) if summary['fields'] else '未指定字段'}",
+        "",
+        "## 低置信度复核清单",
+        "",
+    ]
+    lows = summary["low_confidence_fields"]
+    if lows:
+        for item in lows:
+            lines.append(f"- 第 {item['page_number']} 页 `{item['field']}` = `{item['value']}`，置信度 {item['confidence']:.2f}")
+    else:
+        lines.append("- 无")
+    lines.extend(["", "## 缺失字段", ""])
+    missing = summary["missing_fields"]
+    if missing:
+        for item in missing:
+            lines.append(f"- 第 {item['page_number']} 页 `{item['field']}`")
+    else:
+        lines.append("- 无")
+    lines.extend(["", "## 导出", ""])
+    if summary["export_xlsx_url"]:
+        lines.append(f"- Excel: `{summary['export_xlsx_url']}`")
+    lines.append(f"- Markdown 报告: `{summary['report_md_url']}`")
+    return "\n".join(lines).strip() + "\n"
+
 # ── FastAPI ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -1710,6 +1899,7 @@ async def info():
             "max_upload_mb": MAX_UPLOAD_BYTES // 1024 // 1024,
             "field_confidence_threshold": FIELD_CONF_THRESHOLD,
             "local_text_model": LOCAL_QWEN_MODEL,
+            "local_llm": local_qwen_assets_status(),
             "local_qwen": local_qwen_assets_status(),
             "cloud_text_model": "qwen-plus",
             "cloud_vl_model": PADDLE_VL_MODEL,
@@ -1872,6 +2062,123 @@ async def template_fields(template: UploadFile = File(...)):
     return {"fields": fields}
 
 
+@app.post("/agent/tasks/from-path")
+async def agent_tasks_from_path(payload: dict = Body(...)):
+    paths = payload.get("paths") or payload.get("path") or []
+    if isinstance(paths, str):
+        paths = [paths]
+    mode = payload.get("mode") if payload.get("mode") in ("local", "cloud") else "local"
+    fields = normalize_fields(payload.get("fields") or payload.get("fields_json") or [])
+    uploaded = collect_agent_uploads(paths)
+    pages = build_page_inputs(uploaded)
+    ensure_trial_available(len(pages))
+
+    task_id = uuid.uuid4().hex[:12]
+    source_names = [safe_name(name) for name, _ in uploaded]
+    title = str(payload.get("title") or "").strip()
+    if not title:
+        title = source_names[0] if len(source_names) == 1 else f"{source_names[0]} 等 {len(source_names)} 个文件"
+    now = _now()
+    total_bytes = sum(len(data) for _, data in uploaded)
+
+    cloud_pages = []
+    cloud_error = ""
+    if mode == "cloud":
+        for name, data in uploaded:
+            try:
+                cloud_pages.extend(run_paddle_vl(data, name))
+            except Exception:
+                cloud_error = "Cloud parsing is unavailable; fell back to local OCR"
+                cloud_pages = []
+                break
+
+    with db() as c:
+        c.execute("""INSERT INTO tasks
+            (id, created_at, updated_at, title, mode, status, total_pages,
+             processed_pages, failed_pages, source_names_json, fields_json,
+             has_fields, source_bytes, trial_pages_used, error)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (task_id, now, now, title, mode, "running", len(pages), 0, 0,
+             json.dumps(source_names, ensure_ascii=False),
+             json.dumps(fields, ensure_ascii=False), 1 if fields else 0,
+             total_bytes, len(pages), cloud_error))
+        c.commit()
+
+    processed = failed = 0
+    used_before = get_usage_pages()
+    set_usage_pages(used_before + len(pages))
+
+    for idx, page in enumerate(pages):
+        page_id = uuid.uuid4().hex[:12]
+        img = page["image"]
+        image_path = TASK_PAGES / f"{page_id}.jpg"
+        thumb_path = THUMBS / f"{page_id}.jpg"
+        annotated_path = ANNOTATED / f"{page_id}.jpg"
+        img.save(image_path, "JPEG", quality=90)
+        make_thumb(img, thumb_path)
+        lines = []
+        text = ""
+        page_html = ""
+        page_markdown = ""
+        det_ms = rec_ms = total_ms = 0
+        backend = current_backend()
+        extractor = ""
+        page_status = "done"
+        page_error = ""
+        try:
+            if mode == "cloud" and idx < len(cloud_pages) and (cloud_pages[idx].get("text") or cloud_pages[idx].get("html")):
+                cloud_page = cloud_pages[idx]
+                text = (cloud_page.get("text") or html_to_plain_text(cloud_page.get("html") or "")).strip()
+                page_html = cloud_page.get("html") or ""
+                page_markdown = cloud_page.get("markdown") or ""
+                backend = PADDLE_VL_MODEL
+                out_images = cloud_page.get("output_images") or {}
+                if not download_cloud_image(out_images.get("layout_det_res") or "", annotated_path):
+                    img.thumbnail((1600, 1600), Image.LANCZOS)
+                    img.save(annotated_path, "JPEG", quality=85)
+            else:
+                lines, det_ms, rec_ms = run_ocr(img, load_config())
+                total_ms = round(det_ms + rec_ms)
+                text = "\n".join(l["text"] for l in lines)
+                annotate_image(img, lines, annotated_path)
+
+            if fields:
+                field_results, extractor = (
+                    extract_fields_cloud(text, fields, lines) if mode == "cloud"
+                    else extract_fields_local(text, fields, lines)
+                )
+            else:
+                field_results = []
+            processed += 1
+        except Exception as exc:
+            page_status = "failed"
+            page_error = str(exc)
+            field_results = []
+            failed += 1
+
+        with db() as c:
+            c.execute("""INSERT INTO pages
+                (id, task_id, page_index, source_name, page_number, status,
+                 text, lines_json, backend, det_ms, rec_ms, total_ms,
+                 image_path, thumb_path, annotated_path, extractor, error, html, markdown)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (page_id, task_id, idx, page["source_name"], page["page_number"], page_status,
+                 text, json.dumps(lines, ensure_ascii=False), backend,
+                 round(det_ms), round(rec_ms), round(total_ms),
+                 public_path(image_path), public_path(thumb_path), public_path(annotated_path),
+                 extractor, page_error, page_html, page_markdown))
+            insert_field_results(c, task_id, page_id, field_results)
+            c.commit()
+
+    status = "done" if failed == 0 else ("failed" if processed == 0 else "partial")
+    with db() as c:
+        c.execute("""UPDATE tasks SET status=?, updated_at=?, processed_pages=?, failed_pages=?
+                     WHERE id=?""", (status, _now(), processed, failed, task_id))
+        c.commit()
+        row = c.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+        return task_dict(c, row, include_pages=True)
+
+
 @app.get("/tasks")
 async def tasks_list(limit: int = 100, offset: int = 0, q: str = ""):
     with db() as c:
@@ -1904,6 +2211,23 @@ async def tasks_pages(task_id: str):
     with db() as c:
         rows = c.execute("SELECT * FROM pages WHERE task_id=? ORDER BY page_index", (task_id,)).fetchall()
         return {"items": [page_dict(c, r) for r in rows]}
+
+
+@app.get("/agent/tasks/{task_id}/summary")
+async def agent_tasks_summary(task_id: str):
+    return agent_task_summary_data(task_export_data(task_id))
+
+
+@app.get("/agent/tasks/{task_id}/report")
+async def agent_tasks_report(task_id: str, fmt: str = Query("md", pattern="^(md|json)$")):
+    task = task_export_data(task_id)
+    if fmt == "json":
+        return agent_task_summary_data(task)
+    name = safe_name(task.get("title") or task_id).rsplit(".", 1)[0]
+    return PlainTextResponse(
+        agent_task_report_markdown(task),
+        headers={"Content-Disposition": content_disposition(f"{name}-report.md")},
+    )
 
 
 def task_plain_text(task: dict) -> str:
