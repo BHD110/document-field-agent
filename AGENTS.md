@@ -11,6 +11,19 @@ The v1 product is a batch document field extraction workbench:
 - The legacy `/ocr` route remains for compatibility, but the current UI uses `/tasks`.
 - Table reconstruction UI is intentionally not part of v1.
 
+## Current MCP Branch Status
+
+This branch is the open-source **Document Field Agent / 文档字段提取 Agent** branch. It is published to `publish/main` at `https://github.com/BHD110/document-field-agent`; `origin` still points to the upstream PP-OCRv6 Studio repository. For public release updates, push this branch with `git push publish HEAD:main`.
+
+Branch-specific notes:
+
+- The frontend has been rebuilt as a document field extraction workbench; the backend keeps and extends the PP-OCRv6 OCR capability.
+- The local field extraction model is fixed to `MiniCPM5-1B-GGUF Q4_K_M`; do not expose other local text model choices in this branch.
+- MCP is the generic Agent integration surface: MCP Client -> MCP Server -> local FastAPI backend -> OCR / field extraction / export.
+- Keep MCP documentation client-agnostic. The MCP server should be usable by any Agent client that supports MCP.
+- This open-source branch does not include free quota, trial counting, payment gates, or billing restrictions.
+- README already includes the MCP architecture image, MCP call example image, GitHub open-source positioning, upstream attribution, Windows verification note, macOS/Linux unverified note, and enterprise contact QR code.
+
 ## Build, Test, and Development Commands
 
 Create and activate Python 3.10+ environment, then install the web application dependencies:
@@ -44,8 +57,10 @@ Supported variables are `DASHSCOPE_API_KEY` and `PADDLEOCR_VL_TOKEN`. The blob i
 Before submitting Python changes, run:
 
 ```bash
-python -m compileall webapp bench_local_v2.py gen_result_vis.py run_apple_vision.py scripts/make_secret_blob.py scripts/setup_minicpm5_sidecar.py pilotdeck/mcp_server.py
+python -m compileall webapp bench_local_v2.py gen_result_vis.py run_apple_vision.py scripts/make_secret_blob.py scripts/setup_minicpm5_sidecar.py
 ```
+
+If the MCP server module changes, also run `python -m compileall` on that module before committing.
 
 ## Coding Style & Naming Conventions
 
@@ -73,7 +88,7 @@ Recent history uses short, imperative English subjects, sometimes with a prefix 
 
 - Local mode uses PP-OCRv6 plus the fixed MiniCPM5-1B local text model through llama.cpp on CPU.
 - Cloud mode uses PaddleOCR-VL-1.6 for document parsing and DashScope `qwen-plus` for field extraction.
-- PilotDeck integration lives under `pilotdeck/`; the `local-document-entry` Skill must be maintained according to the system `skill-creator` workflow and validated with `quick_validate.py`.
+- MCP integration is the public Agent integration surface. Keep it generic and avoid positioning docs around one specific Agent client.
 - Cloud result HTML must be sanitized/rendered for display, while field extraction should use plain text / key-value text derived from the HTML.
 - Field results are read-only in v1. Confidence below `0.7` is shown as low confidence; values below the minimum value confidence should be treated as missing.
 - API keys must never appear in source, config, logs, docs, or untracked notes. Use environment variables or the ignored obfuscated blob only.
